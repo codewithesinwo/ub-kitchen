@@ -4,7 +4,6 @@ import { useAdmin } from "../contexts/AdminContext";
 import { Link } from "react-router-dom";
 import CartItem from "../components/CartItem";
 import Button from "../components/Button";
-import { motion } from "framer-motion";
 import {
 	ArrowLeft,
 	CreditCard,
@@ -13,6 +12,8 @@ import {
 	Trash2,
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
+import { api } from "../api";
+// import PaystackPop fr om "paystack-js";
 
 const Cart = () => {
 	const { items, total, clearCart } = useCart();
@@ -31,7 +32,7 @@ const Cart = () => {
 			return;
 		}
 
-		if (!/\S+@\S+\.\S+/.test(customerEmail)) {
+		if (!/\\S+@\\S+\\.\\S+/.test(customerEmail)) {
 			toast.error("Please enter a valid email address");
 			return;
 		}
@@ -39,45 +40,91 @@ const Cart = () => {
 		setIsProcessing(true);
 
 		try {
-			const newOrderData = {
-				customerName: customerName.trim(),
-				customerEmail: customerEmail.trim(),
-				items: items.map((item) => ({
-					name: item.title || item.name,
-					qty: item.quantity || 1,
-					price: item.price,
-				})),
-				total,
-				paymentMode,
-				date: new Date().toISOString(),
-				deliveryMode: "delivery",
-			};
+			if (paymentMode === "online") {
+				// Initialize Paystack payment
+				const timestamp = Date.now(); 
+				const paymentData = {
+					email: customerEmail,
+					amount: total,
+					orderId: `order-${Math.floor(timestamp / 1000)}`,
+				};
 
-			await addOrder(newOrderData);
+				const response = await api.initializePayment(paymentData);
 
-			toast.success("Order placed successfully!", {
-				description: "We will contact you shortly to confirm details.",
-			});
-
-			clearCart();
-			setCustomerName("");
-			setCustomerEmail("");
-			setPaymentMode("online");
-		} catch (error) {
-			console.error(error);
-			toast.error("Failed to place order. Please try again.");
-		} finally {
+				if (response.success) {
+					const paystack = new PaystackPop();
+					paystack.newTransaction({
+						key: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
+						email: customerEmail,
+						amount: total * 100,
+						ref: response.data.reference,
+						onSuccess: async (transaction) => {
+							// Verify payment
+							try {
+								const verifyResponse = await api.verifyPayment(
+									transaction.reference,
+								);
+								if (verifyResponse.success) {
+									// Place order after successful payment
+									await placeOrder();
+								} else {
+									toast.error("Payment verification failed");
+								}
+							} catch (_) {
+								toast.error("Payment verification failed");
+							}
+						},
+						onCancel: () => {
+							toast.error("Payment cancelled");
+							setIsProcessing(false);
+						},
+					});
+				} else {
+					toast.error("Failed to initialize payment");
+					setIsProcessing(false);
+				}
+			} else {
+				// Cash on delivery
+				await placeOrder();
+			}
+		} catch (_) {
+			toast.error("Failed to process checkout. Please try again.");
 			setIsProcessing(false);
 		}
+	};
+
+	const placeOrder = async () => {
+		const newOrderData = {
+			customerName: customerName.trim(),
+			customerEmail: customerEmail.trim(),
+			items: items.map((item) => ({
+				name: item.title || item.name,
+				qty: item.quantity || 1,
+				price: item.price,
+			})),
+			total,
+			paymentMode,
+			date: new Date().toISOString(),
+			deliveryMode: "delivery",
+		};
+
+		await addOrder(newOrderData);
+
+		toast.success("Order placed successfully!", {
+			description: "We will contact you shortly to confirm details.",
+		});
+
+		clearCart();
+		setCustomerName("");
+		setCustomerEmail("");
+		setPaymentMode("online");
+		setIsProcessing(false);
 	};
 
 	if (items.length === 0) {
 		return (
 			<div className="min-h-[80vh] flex items-center justify-center px-4 py-20 bg-gray-50">
-				<motion.div
-					initial={{ opacity: 0, scale: 0.9 }}
-					animate={{ opacity: 1, scale: 1 }}
-					className="text-center max-w-md">
+				<div className="text-center max-w-md">
 					<div className="w-28 h-28 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-8">
 						<ShoppingCart className="w-16 h-16 text-gray-400" />
 					</div>
@@ -94,7 +141,7 @@ const Cart = () => {
 							Browse Menu
 						</Button>
 					</Link>
-				</motion.div>
+				</div>
 				<Toaster />
 			</div>
 		);
@@ -105,10 +152,7 @@ const Cart = () => {
 			<Toaster position="top-center" richColors />
 
 			<div className="max-w-6xl mx-auto">
-				<motion.div
-					initial={{ opacity: 0, y: -20 }}
-					animate={{ opacity: 1, y: 0 }}
-					className="flex items-center gap-4 mb-10">
+				<div className="flex items-center gap-4 mb-10">
 					<Link
 						to="/"
 						className="p-3 hover:bg-white rounded-2xl transition-colors">
@@ -120,25 +164,18 @@ const Cart = () => {
 							{items.length} item{items.length > 1 ? "s" : ""}
 						</p>
 					</div>
-				</motion.div>
+				</div>
 
 				<div className="grid lg:grid-cols-12 gap-8">
 					<div className="lg:col-span-7 space-y-6">
 						{items.map((item, index) => (
-							<motion.div
-								key={item.id || index}
-								initial={{ opacity: 0, y: 20 }}
-								animate={{ opacity: 1, y: 0 }}
-								transition={{ delay: index * 0.05 }}>
+							<div key={item.id || index} className="">
 								<CartItem {...item} />
-							</motion.div>
+							</div>
 						))}
 					</div>
 
-					<motion.div
-						initial={{ opacity: 0, x: 30 }}
-						animate={{ opacity: 1, x: 0 }}
-						className="lg:col-span-5 bg-white rounded-3xl shadow-xl border border-gray-100 p-8 lg:sticky lg:top-24">
+					<div className="lg:col-span-5 bg-white rounded-3xl shadow-xl border border-gray-100 p-8 lg:sticky lg:top-24">
 						<h3 className="text-2xl font-bold text-gray-900 mb-8">
 							Order Summary
 						</h3>
@@ -234,7 +271,7 @@ const Cart = () => {
 							<div className="h-1 w-1 bg-gray-300 rounded-full" />
 							<span>Online + offline payment</span>
 						</div>
-					</motion.div>
+					</div>
 				</div>
 			</div>
 		</div>

@@ -43,6 +43,8 @@ export const AdminProvider = ({ children }) => {
 	});
 
 	useEffect(() => {
+		const isAdmin = localStorage.getItem("ubkitchen-admin") === "true";
+
 		const loadData = async () => {
 			try {
 				const [ordersRes, customersRes] = await Promise.all([
@@ -52,11 +54,18 @@ export const AdminProvider = ({ children }) => {
 				dispatch({ type: "SET_ORDERS", payload: ordersRes });
 				dispatch({ type: "SET_CUSTOMERS", payload: customersRes });
 			} catch (error) {
-				toast.error("Failed to load admin data");
 				console.error("Admin data load failed:", error);
+				// Only show error toast if user is actually an admin
+				if (isAdmin) {
+					toast.error("Failed to load admin data");
+				}
 			}
 		};
-		loadData();
+
+		// Only load admin data if user is authenticated as admin
+		if (isAdmin) {
+			loadData();
+		}
 	}, []);
 
 	const updateOrderStatus = async (id, status) => {

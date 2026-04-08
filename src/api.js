@@ -80,11 +80,13 @@ export const api = {
 			body: JSON.stringify(userData),
 		}),
 
-	// Utility
-	logout: () => {
-		localStorage.removeItem("token");
-		localStorage.removeItem("user");
-	},
+	// Payment
+	initializePayment: (paymentData) =>
+		apiCall("/payment/initialize", {
+			method: "POST",
+			body: JSON.stringify(paymentData),
+		}),
+	verifyPayment: (reference) => apiCall(`/payment/verify/${reference}`),
 };
 
 export default api;
